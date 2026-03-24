@@ -58,6 +58,66 @@ app.get("/api/me", (req, res) => {
   res.json(userInfo);
 });
 
+// --- Debug: test the full token chain step by step ---
+app.get("/api/debug/token-chain", async (req, res) => {
+  const steps = {};
+
+  // Step 1: Extract user info
+  const userInfo = extractUserInfo(req);
+  steps.userInfo = userInfo || { error: "No user identity found" };
+
+  // Step 2: Try getting a technical token (no impersonation)
+  try {
+    const techToken = await getTechnicalToken();
+    const decoded = jwt.decode(techToken);
+    steps.technicalToken = {
+      success: true,
+      scope: decoded?.scope,
+      sub: decoded?.sub,
+      email: decoded?.email,
+      cat: decoded?.cat,
+    };
+  } catch (e) {
+    steps.technicalToken = { error: e.message };
+  }
+
+  // Step 3: Try getting an impersonated token
+  if (userInfo?.email) {
+    try {
+      const impToken = await getImpersonatedToken(userInfo);
+      const decoded = jwt.decode(impToken);
+      steps.impersonatedToken = {
+        success: true,
+        scope: decoded?.scope,
+        sub: decoded?.sub,
+        email: decoded?.email,
+        user_name: decoded?.user_name,
+        cat: decoded?.cat,
+      };
+    } catch (e) {
+      steps.impersonatedToken = { error: e.message };
+    }
+  }
+
+  // Step 4: Try calling Cases API with technical token
+  try {
+    const techToken = await getTechnicalToken();
+    const response = await fetch(
+      `${IH_GATEWAY}/api/cases/v3/cases?size=1`,
+      { headers: { Authorization: `Bearer ${techToken}` } }
+    );
+    steps.casesApiWithTechToken = {
+      status: response.status,
+      ok: response.ok,
+      body: response.ok ? "success" : await response.text(),
+    };
+  } catch (e) {
+    steps.casesApiWithTechToken = { error: e.message };
+  }
+
+  res.json(steps);
+});
+
 // --- Post a comment on a case using user impersonation ---
 app.post("/api/cases/:handle/comments", async (req, res) => {
   const { handle } = req.params;
