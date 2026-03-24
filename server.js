@@ -118,7 +118,7 @@ app.get("/api/debug/token-chain", async (req, res) => {
   res.json(steps);
 });
 
-// --- Post a comment on a case using user impersonation ---
+// --- Post a comment on a case using the user's own bearer token ---
 app.post("/api/cases/:handle/comments", async (req, res) => {
   const { handle } = req.params;
   const { description } = req.body;
@@ -127,32 +127,19 @@ app.post("/api/cases/:handle/comments", async (req, res) => {
     return res.status(400).json({ error: "description is required" });
   }
 
-  // Step 1: Extract user identity
-  const userInfo = extractUserInfo(req);
-  if (!userInfo) {
+  // Step 1: Get the user's bearer token (passed by IH Gateway)
+  const authHeader = req.headers.authorization || "";
+  if (!authHeader.startsWith("Bearer ")) {
     return res.status(401).json({
-      error: "Could not extract user identity from session",
+      error: "No bearer token from IH Gateway",
     });
   }
+  const userToken = authHeader.slice(7);
 
-  // Step 2: Get impersonated token via Technical Token Manager
-  let impersonatedToken;
+  // Step 2: Create the case comment using the user's own token
+  // The user token already has wom.techuser scope — no impersonation needed
   try {
-    impersonatedToken = await getImpersonatedToken(userInfo);
-  } catch (e) {
-    return res.status(502).json({
-      error: "Failed to get impersonated token",
-      detail: e.message,
-    });
-  }
-
-  // Step 3: Create the case comment using the impersonated token
-  try {
-    const comment = await createCaseComment(
-      handle,
-      description,
-      impersonatedToken
-    );
+    const comment = await createCaseComment(handle, description, userToken);
     res.json({ success: true, comment });
   } catch (e) {
     return res.status(502).json({
@@ -162,22 +149,20 @@ app.post("/api/cases/:handle/comments", async (req, res) => {
   }
 });
 
+// --- Helper to get user's bearer token from the gateway ---
+function getUserToken(req) {
+  const authHeader = req.headers.authorization || "";
+  if (authHeader.startsWith("Bearer ")) {
+    return authHeader.slice(7);
+  }
+  return null;
+}
+
 // --- List cases (so user can pick one) ---
 app.get("/api/cases", async (req, res) => {
-  const userInfo = extractUserInfo(req);
-
-  // Use impersonated token if we have user identity, otherwise fall back to technical token
-  let token;
-  try {
-    if (userInfo) {
-      token = await getImpersonatedToken(userInfo);
-    } else {
-      token = await getTechnicalToken();
-    }
-  } catch (e) {
-    return res
-      .status(502)
-      .json({ error: "Failed to get token", detail: e.message });
+  const token = getUserToken(req);
+  if (!token) {
+    return res.status(401).json({ error: "No bearer token from IH Gateway" });
   }
 
   try {
@@ -197,19 +182,9 @@ app.get("/api/cases", async (req, res) => {
 // --- Get comments for a case ---
 app.get("/api/cases/:handle/comments", async (req, res) => {
   const { handle } = req.params;
-  const userInfo = extractUserInfo(req);
-
-  let token;
-  try {
-    if (userInfo) {
-      token = await getImpersonatedToken(userInfo);
-    } else {
-      token = await getTechnicalToken();
-    }
-  } catch (e) {
-    return res
-      .status(502)
-      .json({ error: "Failed to get token", detail: e.message });
+  const token = getUserToken(req);
+  if (!token) {
+    return res.status(401).json({ error: "No bearer token from IH Gateway" });
   }
 
   try {
