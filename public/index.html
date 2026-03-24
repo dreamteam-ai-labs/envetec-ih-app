@@ -147,7 +147,7 @@
       try {
         const res = await fetch(`/api/cases/${handle}/comments`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: apiHeaders('application/json'),
           body: JSON.stringify({ description })
         });
         const data = await res.json();
@@ -212,6 +212,21 @@
       const div = document.createElement('div');
       div.textContent = str;
       return div.innerHTML;
+    }
+
+    // --- Get XSRF token from cookie (set by IH Gateway) ---
+    function getXsrfToken() {
+      const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/);
+      return match ? decodeURIComponent(match[1]) : null;
+    }
+
+    // --- Helper to build headers with XSRF token ---
+    function apiHeaders(contentType) {
+      const headers = {};
+      if (contentType) headers['Content-Type'] = contentType;
+      const xsrf = getXsrfToken();
+      if (xsrf) headers['X-XSRF-TOKEN'] = xsrf;
+      return headers;
     }
 
     // Init
