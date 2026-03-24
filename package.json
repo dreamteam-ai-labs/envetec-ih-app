@@ -1,0 +1,14 @@
+{
+  "name": "envetec-ih-self-hosted",
+  "version": "1.0.0",
+  "description": "Insights Hub self-hosted app - case comment with user impersonation",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2"
+  }
+}

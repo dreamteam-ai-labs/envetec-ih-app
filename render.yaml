@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: envetec-ih-app
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: IH_TENANT
+        value: envetec
+      - key: IH_APP_NAME
+        sync: false
+      - key: IH_APP_VERSION
+        value: "1.0.0"
+      - key: IH_CLIENT_ID
+        sync: false
+      - key: IH_CLIENT_SECRET
+        sync: false

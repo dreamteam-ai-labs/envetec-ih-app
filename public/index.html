@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Envetec - Case Comments</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+    .header { background: #009999; color: white; padding: 16px 24px; display: flex; align-items: center; gap: 16px; }
+    .header h1 { font-size: 18px; font-weight: 500; }
+    .user-badge { margin-left: auto; font-size: 13px; background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 12px; }
+    .container { max-width: 900px; margin: 24px auto; padding: 0 16px; }
+    .card { background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 20px; margin-bottom: 16px; }
+    .card h2 { font-size: 16px; margin-bottom: 12px; color: #009999; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .tab { padding: 8px 16px; border: 1px solid #ddd; border-radius: 6px; cursor: pointer; background: white; font-size: 13px; }
+    .tab.active { background: #009999; color: white; border-color: #009999; }
+    label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px; color: #555; }
+    input, textarea, select { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; margin-bottom: 12px; }
+    textarea { height: 80px; resize: vertical; }
+    button { background: #009999; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+    button:hover { background: #007777; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    .result { margin-top: 12px; padding: 12px; border-radius: 6px; font-size: 13px; font-family: monospace; white-space: pre-wrap; word-break: break-all; max-height: 400px; overflow-y: auto; }
+    .result.success { background: #e8f5e9; border: 1px solid #c8e6c9; }
+    .result.error { background: #ffebee; border: 1px solid #ffcdd2; }
+    .result.info { background: #e3f2fd; border: 1px solid #bbdefb; }
+    .comment { border-bottom: 1px solid #eee; padding: 8px 0; }
+    .comment:last-child { border-bottom: none; }
+    .comment .meta { font-size: 12px; color: #888; }
+    .comment .body { margin-top: 4px; font-size: 14px; }
+    .status { font-size: 12px; padding: 2px 8px; border-radius: 4px; display: inline-block; }
+    .status.ok { background: #e8f5e9; color: #2e7d32; }
+    .status.fail { background: #ffebee; color: #c62828; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Envetec Case Comments</h1>
+    <div class="user-badge" id="userBadge">Loading...</div>
+  </div>
+
+  <div class="container">
+    <!-- Tab navigation -->
+    <div class="tabs">
+      <div class="tab active" onclick="showTab('comments')">Case Comments</div>
+      <div class="tab" onclick="showTab('debug')">Debug / Auth Info</div>
+    </div>
+
+    <!-- Comments Tab -->
+    <div id="tab-comments">
+      <div class="card">
+        <h2>Post a Comment</h2>
+        <label for="caseHandle">Case Handle</label>
+        <input type="text" id="caseHandle" placeholder="e.g. AA-001">
+        <label for="commentText">Comment</label>
+        <textarea id="commentText" placeholder="Type your comment..."></textarea>
+        <button onclick="postComment()" id="postBtn">Post Comment</button>
+        <div id="postResult" class="result" style="display:none"></div>
+      </div>
+
+      <div class="card">
+        <h2>Recent Comments</h2>
+        <label for="viewHandle">Case Handle</label>
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <input type="text" id="viewHandle" placeholder="e.g. AA-001" style="margin-bottom:0">
+          <button onclick="loadComments()">Load</button>
+        </div>
+        <div id="commentsList">Select a case to view comments</div>
+      </div>
+    </div>
+
+    <!-- Debug Tab -->
+    <div id="tab-debug" style="display:none">
+      <div class="card">
+        <h2>Authentication Diagnostic</h2>
+        <p style="font-size:13px;color:#666;margin-bottom:12px">
+          This shows everything Insights Hub sends to this app. Use this to confirm how user identity is passed.
+        </p>
+        <button onclick="loadDebug()">Refresh Debug Info</button>
+        <div id="debugResult" class="result info" style="display:none"></div>
+      </div>
+
+      <div class="card">
+        <h2>Auth Status</h2>
+        <table style="width:100%;font-size:13px">
+          <tr><td>User Identity</td><td id="authStatus">Checking...</td></tr>
+          <tr><td>Email</td><td id="authEmail">-</td></tr>
+          <tr><td>Source</td><td id="authSource">-</td></tr>
+          <tr><td>Token Claims</td><td id="authClaims">-</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- Tab switching ---
+    function showTab(name) {
+      document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('[id^="tab-"]').forEach(t => t.style.display = 'none');
+      document.getElementById('tab-' + name).style.display = 'block';
+      event.target.classList.add('active');
+    }
+
+    // --- Load user info on startup ---
+    async function loadUserInfo() {
+      try {
+        const res = await fetch('/api/me');
+        const data = await res.json();
+        if (data.email) {
+          document.getElementById('userBadge').textContent = data.email;
+          document.getElementById('authStatus').innerHTML = '<span class="status ok">Authenticated</span>';
+          document.getElementById('authEmail').textContent = data.email;
+          document.getElementById('authSource').textContent = data.source;
+          if (data.allClaims) {
+            document.getElementById('authClaims').textContent = JSON.stringify(data.allClaims, null, 2);
+          }
+        } else if (data.allClaims) {
+          document.getElementById('userBadge').textContent = 'No email in token';
+          document.getElementById('authStatus').innerHTML = '<span class="status fail">Token found, no email</span>';
+          document.getElementById('authClaims').textContent = JSON.stringify(data.allClaims, null, 2);
+        } else {
+          document.getElementById('userBadge').textContent = 'Not authenticated';
+          document.getElementById('authStatus').innerHTML = '<span class="status fail">No auth detected</span>';
+        }
+      } catch (e) {
+        document.getElementById('userBadge').textContent = 'Auth error';
+        document.getElementById('authStatus').innerHTML = '<span class="status fail">Error: ' + e.message + '</span>';
+      }
+    }
+
+    // --- Post a comment ---
+    async function postComment() {
+      const handle = document.getElementById('caseHandle').value.trim();
+      const description = document.getElementById('commentText').value.trim();
+      const resultEl = document.getElementById('postResult');
+
+      if (!handle || !description) {
+        resultEl.style.display = 'block';
+        resultEl.className = 'result error';
+        resultEl.textContent = 'Please enter both a case handle and comment text';
+        return;
+      }
+
+      document.getElementById('postBtn').disabled = true;
+      try {
+        const res = await fetch(`/api/cases/${handle}/comments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ description })
+        });
+        const data = await res.json();
+        resultEl.style.display = 'block';
+        if (data.success) {
+          resultEl.className = 'result success';
+          resultEl.textContent = 'Comment posted!\n\n' + JSON.stringify(data.comment, null, 2);
+          document.getElementById('commentText').value = '';
+        } else {
+          resultEl.className = 'result error';
+          resultEl.textContent = JSON.stringify(data, null, 2);
+        }
+      } catch (e) {
+        resultEl.style.display = 'block';
+        resultEl.className = 'result error';
+        resultEl.textContent = 'Network error: ' + e.message;
+      }
+      document.getElementById('postBtn').disabled = false;
+    }
+
+    // --- Load comments for a case ---
+    async function loadComments() {
+      const handle = document.getElementById('viewHandle').value.trim();
+      const listEl = document.getElementById('commentsList');
+      if (!handle) { listEl.textContent = 'Enter a case handle'; return; }
+
+      listEl.textContent = 'Loading...';
+      try {
+        const res = await fetch(`/api/cases/${handle}/comments`);
+        const data = await res.json();
+        if (data.comments && data.comments.length > 0) {
+          listEl.innerHTML = data.comments.map(c =>
+            `<div class="comment">
+              <div class="meta">${c.createdBy || 'unknown'} &middot; ${new Date(c.createdDate).toLocaleString()}</div>
+              <div class="body">${escapeHtml(c.description)}</div>
+            </div>`
+          ).join('');
+        } else {
+          listEl.textContent = 'No comments found for ' + handle;
+        }
+      } catch (e) {
+        listEl.textContent = 'Error: ' + e.message;
+      }
+    }
+
+    // --- Debug endpoint ---
+    async function loadDebug() {
+      const resultEl = document.getElementById('debugResult');
+      resultEl.style.display = 'block';
+      resultEl.textContent = 'Loading...';
+      try {
+        const res = await fetch('/api/debug/headers');
+        const data = await res.json();
+        resultEl.textContent = JSON.stringify(data, null, 2);
+      } catch (e) {
+        resultEl.className = 'result error';
+        resultEl.textContent = 'Error: ' + e.message;
+      }
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    // Init
+    loadUserInfo();
+  </script>
+</body>
+</html>
