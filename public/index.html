@@ -130,7 +130,7 @@
       }
     }
 
-    // --- Post a comment (calls Cases API directly via IH Gateway) ---
+    // --- Post a comment (via our backend, which calls gateway.eu1.mindsphere.io) ---
     async function postComment() {
       const handle = document.getElementById('caseHandle').value.trim();
       const description = document.getElementById('commentText').value.trim();
@@ -145,26 +145,20 @@
 
       document.getElementById('postBtn').disabled = true;
       try {
-        // Call the Cases API directly through the IH Gateway
-        // The browser session cookies handle auth, X-XSRF-TOKEN prevents CSRF
-        const res = await fetch(`/api/cases/v3/cases/${handle}/comments`, {
+        const res = await fetch(`/api/cases/${handle}/comments`, {
           method: 'POST',
           headers: apiHeaders('application/json'),
-          body: JSON.stringify({
-            isActive: true,
-            isResolution: false,
-            description
-          })
+          body: JSON.stringify({ description })
         });
         const data = await res.json();
         resultEl.style.display = 'block';
-        if (res.ok) {
+        if (data.success) {
           resultEl.className = 'result success';
-          resultEl.textContent = 'Comment posted by ' + (data.createdBy || 'unknown') + '!\n\n' + JSON.stringify(data, null, 2);
+          resultEl.textContent = 'Comment posted by ' + (data.comment?.createdBy || 'unknown') + '!\n\n' + JSON.stringify(data.comment, null, 2);
           document.getElementById('commentText').value = '';
         } else {
           resultEl.className = 'result error';
-          resultEl.textContent = 'API error (' + res.status + '):\n' + JSON.stringify(data, null, 2);
+          resultEl.textContent = JSON.stringify(data, null, 2);
         }
       } catch (e) {
         resultEl.style.display = 'block';
@@ -174,7 +168,7 @@
       document.getElementById('postBtn').disabled = false;
     }
 
-    // --- Load comments for a case (calls Cases API directly via IH Gateway) ---
+    // --- Load comments for a case ---
     async function loadComments() {
       const handle = document.getElementById('viewHandle').value.trim();
       const listEl = document.getElementById('commentsList');
@@ -182,9 +176,7 @@
 
       listEl.textContent = 'Loading...';
       try {
-        const res = await fetch(`/api/cases/v3/cases/${handle}/comments`, {
-          headers: apiHeaders()
-        });
+        const res = await fetch(`/api/cases/${handle}/comments`);
         const data = await res.json();
         if (data.comments && data.comments.length > 0) {
           listEl.innerHTML = data.comments.map(c =>

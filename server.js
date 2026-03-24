@@ -115,6 +115,26 @@ app.get("/api/debug/token-chain", async (req, res) => {
     steps.casesApiWithTechToken = { error: e.message };
   }
 
+  // Step 5: Try calling Cases API with the USER's token (from gateway)
+  const userToken = getUserToken(req);
+  if (userToken) {
+    try {
+      const response = await fetch(
+        `${IH_GATEWAY}/api/cases/v3/cases?size=1`,
+        { headers: { Authorization: `Bearer ${userToken}` } }
+      );
+      const responseHeaders = Object.fromEntries(response.headers.entries());
+      steps.casesApiWithUserToken = {
+        status: response.status,
+        ok: response.ok,
+        headers: responseHeaders,
+        body: response.ok ? await response.json() : await response.text(),
+      };
+    } catch (e) {
+      steps.casesApiWithUserToken = { error: e.message };
+    }
+  }
+
   res.json(steps);
 });
 
@@ -355,25 +375,32 @@ async function getImpersonatedToken(userInfo) {
 }
 
 async function createCaseComment(handle, description, token) {
-  const response = await fetch(
-    `${IH_GATEWAY}/api/cases/v3/cases/${handle}/comments`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        isActive: true,
-        isResolution: false,
-        description,
-      }),
-    }
-  );
+  const url = `${IH_GATEWAY}/api/cases/v3/cases/${handle}/comments`;
+  console.log(`[createCaseComment] POST ${url}`);
+  console.log(`[createCaseComment] Token starts with: ${token.substring(0, 20)}...`);
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      isActive: true,
+      isResolution: false,
+      description,
+    }),
+  });
+
+  const responseHeaders = Object.fromEntries(response.headers.entries());
+  console.log(`[createCaseComment] Response: ${response.status}`, responseHeaders);
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Case comment failed (${response.status}): ${text}`);
+    console.log(`[createCaseComment] Error body: ${text}`);
+    throw new Error(
+      `Case comment failed (${response.status}): ${text} | Headers: ${JSON.stringify(responseHeaders)}`
+    );
   }
 
   return response.json();
