@@ -103,7 +103,7 @@ app.get("/api/debug/token-chain", async (req, res) => {
   try {
     const techToken = await getTechnicalToken();
     const response = await fetch(
-      `${IH_GATEWAY}/api/cases/v3/cases?size=1`,
+      `${IH_GATEWAY}/api/casemanagement/v3/cases?size=1`,
       { headers: { Authorization: `Bearer ${techToken}` } }
     );
     steps.casesApiWithTechToken = {
@@ -120,7 +120,7 @@ app.get("/api/debug/token-chain", async (req, res) => {
   if (userToken) {
     try {
       const response = await fetch(
-        `${IH_GATEWAY}/api/cases/v3/cases?size=1`,
+        `${IH_GATEWAY}/api/casemanagement/v3/cases?size=1`,
         { headers: { Authorization: `Bearer ${userToken}` } }
       );
       const responseHeaders = Object.fromEntries(response.headers.entries());
@@ -187,7 +187,7 @@ app.get("/api/cases", async (req, res) => {
 
   try {
     const response = await fetch(
-      `${IH_GATEWAY}/api/cases/v3/cases?size=20&sort=createdDate,desc`,
+      `${IH_GATEWAY}/api/casemanagement/v3/cases?size=20&sort=createdDate,desc`,
       {
         headers: { Authorization: `Bearer ${token}` },
       }
@@ -209,7 +209,7 @@ app.get("/api/cases/:handle/comments", async (req, res) => {
 
   try {
     const response = await fetch(
-      `${IH_GATEWAY}/api/cases/v3/cases/${handle}/comments`,
+      `${IH_GATEWAY}/api/casemanagement/v3/cases/${handle}/comments`,
       {
         headers: { Authorization: `Bearer ${token}` },
       }
@@ -375,7 +375,7 @@ async function getImpersonatedToken(userInfo) {
 }
 
 async function createCaseComment(handle, description, token) {
-  const url = `${IH_GATEWAY}/api/cases/v3/cases/${handle}/comments`;
+  const url = `${IH_GATEWAY}/api/casemanagement/v3/cases/${handle}/comments`;
   console.log(`[createCaseComment] POST ${url}`);
   console.log(`[createCaseComment] Token starts with: ${token.substring(0, 20)}...`);
 
